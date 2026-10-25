@@ -44,21 +44,26 @@ app/
   (dashboard)/
     activity/
       actions.ts
+      loading.tsx
       page.tsx
     dashboard/
       loading.tsx
       page.tsx
     incidents/
       actions.ts
+      loading.tsx
       page.tsx
     services/
       actions.ts
+      loading.tsx
       page.tsx
     team/
       actions.ts
+      loading.tsx
       page.tsx
     tickets/
       actions.ts
+      loading.tsx
       page.tsx
     actions.ts
     layout.tsx
@@ -77,6 +82,7 @@ app/
 components/
   activity/
     ActivityView.tsx
+    ActivityViewSkeleton.tsx
   dashboard/
     ActivityFeed.tsx
     Avatar.tsx
@@ -91,11 +97,13 @@ components/
   incidents/
     IncidentModal.tsx
     IncidentsView.tsx
+    IncidentsViewSkeleton.tsx
   invite/
     AcceptInviteForm.tsx
   services/
     ServiceModal.tsx
     ServicesView.tsx
+    ServicesViewSkeleton.tsx
   shared/
     ActivityDescription.tsx
     ConfirmDialog.tsx
@@ -114,9 +122,11 @@ components/
   team/
     TeamInviteModal.tsx
     TeamView.tsx
+    TeamViewSkeleton.tsx
   tickets/
     TicketModal.tsx
     TicketsView.tsx
+    TicketsViewSkeleton.tsx
 e2e/
   ticket-realtime.spec.ts
 lib/
@@ -233,6 +243,21 @@ export async function listActivityAction(
 }
 </file>
 
+<file path="app/(dashboard)/activity/loading.tsx">
+import { ActivityViewSkeleton } from "@/components/activity/ActivityViewSkeleton";
+
+// Next's file convention for a route-level Suspense boundary: this
+// wraps `page.tsx` in a `<Suspense>` automatically, so the shared
+// layout (TopBar, nav) streams and paints immediately while
+// `activity/page.tsx`'s server-side query prefetch is still in
+// flight, showing this in the meantime instead of blocking the whole
+// document behind it. Same pattern as the other list pages'
+// loading.tsx.
+export default function ActivityLoading() {
+  return <ActivityViewSkeleton />;
+}
+</file>
+
 <file path="app/(dashboard)/dashboard/loading.tsx">
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
@@ -296,6 +321,21 @@ export async function updateIncidentAction(
 }
 </file>
 
+<file path="app/(dashboard)/incidents/loading.tsx">
+import { IncidentsViewSkeleton } from "@/components/incidents/IncidentsViewSkeleton";
+
+// Next's file convention for a route-level Suspense boundary: this
+// wraps `page.tsx` in a `<Suspense>` automatically, so the shared
+// layout (TopBar, nav) streams and paints immediately while
+// `incidents/page.tsx`'s server-side query prefetch is still in
+// flight, showing this in the meantime instead of blocking the whole
+// document behind it. Same pattern as dashboard/loading.tsx and
+// tickets/loading.tsx.
+export default function IncidentsLoading() {
+  return <IncidentsViewSkeleton />;
+}
+</file>
+
 <file path="app/(dashboard)/services/actions.ts">
 "use server";
 
@@ -343,6 +383,21 @@ export async function updateServiceAction(
   } catch (error) {
     return { ok: false, error: toActionError(error) };
   }
+}
+</file>
+
+<file path="app/(dashboard)/services/loading.tsx">
+import { ServicesViewSkeleton } from "@/components/services/ServicesViewSkeleton";
+
+// Next's file convention for a route-level Suspense boundary: this
+// wraps `page.tsx` in a `<Suspense>` automatically, so the shared
+// layout (TopBar, nav) streams and paints immediately while
+// `services/page.tsx`'s server-side query prefetch is still in
+// flight, showing this in the meantime instead of blocking the whole
+// document behind it. Same pattern as dashboard/tickets/incidents'
+// loading.tsx.
+export default function ServicesLoading() {
+  return <ServicesViewSkeleton />;
 }
 </file>
 
@@ -431,6 +486,21 @@ export async function deactivateMemberAction(
 }
 </file>
 
+<file path="app/(dashboard)/team/loading.tsx">
+import { TeamViewSkeleton } from "@/components/team/TeamViewSkeleton";
+
+// Next's file convention for a route-level Suspense boundary: this
+// wraps `page.tsx` in a `<Suspense>` automatically, so the shared
+// layout (TopBar, nav) streams and paints immediately while
+// `team/page.tsx`'s server-side auth check and query prefetch are
+// still in flight, showing this in the meantime instead of blocking
+// the whole document behind it. Same pattern as the other list pages'
+// loading.tsx.
+export default function TeamLoading() {
+  return <TeamViewSkeleton />;
+}
+</file>
+
 <file path="app/(dashboard)/tickets/actions.ts">
 "use server";
 
@@ -490,6 +560,20 @@ export async function updateTicketAction(
   } catch (error) {
     return { ok: false, error: toActionError(error) };
   }
+}
+</file>
+
+<file path="app/(dashboard)/tickets/loading.tsx">
+import { TicketsViewSkeleton } from "@/components/tickets/TicketsViewSkeleton";
+
+// Next's file convention for a route-level Suspense boundary: this
+// wraps `page.tsx` in a `<Suspense>` automatically, so the shared
+// layout (TopBar, nav) streams and paints immediately while
+// `tickets/page.tsx`'s server-side query prefetch is still in flight,
+// showing this in the meantime instead of blocking the whole document
+// behind it. Same pattern as dashboard/loading.tsx.
+export default function TicketsLoading() {
+  return <TicketsViewSkeleton />;
 }
 </file>
 
@@ -723,6 +807,116 @@ export function LoginForm() {
 }
 </file>
 
+<file path="components/activity/ActivityViewSkeleton.tsx">
+import {
+  Skeleton,
+  SkeletonCircle,
+  SkeletonText,
+} from "@/components/shared/Skeleton";
+import type { Activity } from "@/types";
+
+const targetFilters: Activity["targetType"][] = [
+  "ticket",
+  "incident",
+  "service",
+  "user",
+];
+
+const targetFilterLabels: Record<Activity["targetType"], string> = {
+  ticket: "Tickets",
+  incident: "Incidents",
+  service: "Services",
+  user: "Team",
+};
+
+const ROW_COUNT = 6;
+
+/**
+ * ActivityPage's `loading.tsx` fallback (STREAMING_SSR_TODO.md), same
+ * role as the earlier view skeletons: a plain Server Component with
+ * zero queries of its own, shown the moment navigation starts while
+ * `activity/page.tsx`'s server-side prefetch is still in flight, then
+ * swapped out for the real, already-hydrated `ActivityView` once that
+ * resolves.
+ *
+ * Mirrors `ActivityView`'s layout (header, filter bar, search box, one
+ * day-group header, and rows shaped like the real activity row —
+ * avatar, two text lines, timestamp) — same row shape as dashboard's
+ * `ActivityFeedSkeleton`, just in this view's own list chrome. Filter
+ * labels are real text (they're static; only the count next to each
+ * is unknown yet). The day-group label itself (`dayLabel()` — "Today",
+ * "Yesterday", etc.) depends on data that doesn't exist yet, so it's a
+ * skeleton bar rather than a guessed date.
+ *
+ * Deliberate omission: the "Load more" footer button only ever
+ * appears once `hasNextPage` is known, which this skeleton has no way
+ * to predict — left out entirely rather than guessed, same reasoning
+ * as `ServicesViewSkeleton` leaving out the Manager-only button.
+ */
+export function ActivityViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="shrink-0">
+        <h1 className="text-lg font-medium text-ink">Activity</h1>
+        <SkeletonText width="w-28" className="mt-1.5 h-3" />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-1">
+              <div className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-ink-dim">
+                <span>All</span>
+                <Skeleton className="h-2.5 w-3 rounded-sm" />
+              </div>
+
+              {targetFilters.map((type) => (
+                <div
+                  key={type}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-dim"
+                >
+                  <span>{targetFilterLabels[type]}</span>
+                  <Skeleton className="h-2.5 w-3 rounded-sm" />
+                </div>
+              ))}
+            </div>
+
+            <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col">
+            <div>
+              <div className="border-b border-line bg-panel-raised/50 px-4 py-1.5">
+                <Skeleton className="h-2.5 w-12 rounded-sm" />
+              </div>
+
+              <ul>
+                {Array.from({ length: ROW_COUNT }).map((_, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2.5 border-b border-line px-4 py-3 last:border-b-0"
+                  >
+                    <SkeletonCircle />
+
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <SkeletonText width="w-4/5" />
+                    </div>
+
+                    <SkeletonText width="w-10" className="mt-0.5 h-2.5" />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="components/dashboard/DashboardSkeleton.tsx">
 import { StatRow } from "@/components/dashboard/StatRow";
 import { IncidentsPanelSkeleton } from "@/components/dashboard/IncidentsPanel";
@@ -773,6 +967,100 @@ export function DashboardSkeleton() {
         </div>
       </div>
     </>
+  );
+}
+</file>
+
+<file path="components/incidents/IncidentsViewSkeleton.tsx">
+import {
+  Skeleton,
+  SkeletonCircle,
+  SkeletonText,
+} from "@/components/shared/Skeleton";
+import { incidentStatusMeta, type IncidentStatus } from "@/types";
+
+const statusFilters: IncidentStatus[] = [
+  "INVESTIGATING",
+  "IDENTIFIED",
+  "MONITORING",
+  "RESOLVED",
+];
+
+const ROW_COUNT = 6;
+
+/**
+ * IncidentsPage's `loading.tsx` fallback (STREAMING_SSR_TODO.md), same
+ * role as TicketsViewSkeleton/DashboardSkeleton: a plain Server
+ * Component with zero queries of its own, shown the moment navigation
+ * starts while `incidents/page.tsx`'s server-side prefetch is still in
+ * flight, then swapped out for the real, already-hydrated
+ * `IncidentsView` once that resolves.
+ *
+ * Mirrors `IncidentsView`'s exact layout (header, filter bar, search
+ * box, list rows) so nothing shifts position when the real content
+ * replaces it. "New incident" needs no click handler here — it's
+ * decorative until the real button replaces it. Filter labels are
+ * real text (they're static; only the count next to each is unknown
+ * yet), same convention as StatRow's `value: null` placeholder. Each
+ * row's severity border is left neutral (`border-line-strong`) since
+ * the real severity isn't known yet either.
+ */
+export function IncidentsViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-medium text-ink">Incidents</h1>
+          <SkeletonText width="w-28" className="mt-1.5 h-3" />
+        </div>
+
+        <div className="h-8 w-32 shrink-0 rounded-md bg-line-strong opacity-60" />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-1">
+              <div className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-ink-dim">
+                <span>All</span>
+                <Skeleton className="h-2.5 w-3 rounded-sm" />
+              </div>
+
+              {statusFilters.map((status) => (
+                <div
+                  key={status}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-dim"
+                >
+                  <span>{incidentStatusMeta[status].label}</span>
+                  <Skeleton className="h-2.5 w-3 rounded-sm" />
+                </div>
+              ))}
+            </div>
+
+            <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+          </div>
+        </div>
+
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {Array.from({ length: ROW_COUNT }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-4 border-b border-l-2 border-line border-l-line-strong px-4 py-3 last:border-b-0"
+            >
+              <Skeleton className="hidden h-4 w-14 shrink-0 rounded sm:inline-block" />
+              <Skeleton className="size-1.5 shrink-0 rounded-full sm:hidden" />
+
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3.5 w-2/3 rounded" />
+                <Skeleton className="mt-1.5 h-2.5 w-36 rounded" />
+              </div>
+
+              <SkeletonCircle />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 </file>
@@ -853,6 +1141,108 @@ export function AcceptInviteForm({
         {isPending ? "Joining…" : "Join the team"}
       </button>
     </form>
+  );
+}
+</file>
+
+<file path="components/services/ServicesViewSkeleton.tsx">
+import { Skeleton, SkeletonText } from "@/components/shared/Skeleton";
+import { serviceStatusMeta, type ServiceStatus } from "@/types";
+
+const statusFilters: ServiceStatus[] = ["OPERATIONAL", "DEGRADED", "OUTAGE"];
+
+const CARD_COUNT = 6;
+
+/**
+ * ServicesPage's `loading.tsx` fallback (STREAMING_SSR_TODO.md), same
+ * role as TicketsViewSkeleton/IncidentsViewSkeleton: a plain Server
+ * Component with zero queries of its own, shown the moment navigation
+ * starts while `services/page.tsx`'s server-side prefetch is still in
+ * flight, then swapped out for the real, already-hydrated
+ * `ServicesView` once that resolves.
+ *
+ * Mirrors `ServicesView`'s card-grid layout (header, filter bar,
+ * search box, service cards shaped like the real one — name/status
+ * chip, latency/error figures, sparkline) so nothing shifts position
+ * when the real content replaces it. Filter labels are real text
+ * (they're static; only the count next to each is unknown yet), same
+ * convention as StatRow's `value: null` placeholder.
+ *
+ * Deliberate omission: the real "New service" button and "Archived"
+ * filter pill are Manager-only (`canManageServices`), and this
+ * skeleton has no session to check that against — a role check here
+ * would mean awaiting `getCurrentUser()` in the fallback itself,
+ * which defeats the point of a fallback that paints instantly while
+ * the page's own prefetch is still in flight. Left out entirely
+ * rather than guessed either way, so a Member never briefly sees a
+ * button they can't use; a Manager sees it pop in once the real view
+ * hydrates. Revisit only if that pop-in turns out to matter in
+ * practice — same kind of accepted trade-off as Dashboard's
+ * `staleTime` decision.
+ */
+export function ServicesViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-medium text-ink">Services</h1>
+          <SkeletonText width="w-24" className="mt-1.5 h-3" />
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-1">
+              <div className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-ink-dim">
+                <span>All</span>
+                <Skeleton className="h-2.5 w-3 rounded-sm" />
+              </div>
+
+              {statusFilters.map((status) => (
+                <div
+                  key={status}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-dim"
+                >
+                  <span>{serviceStatusMeta[status].label}</span>
+                  <Skeleton className="h-2.5 w-3 rounded-sm" />
+                </div>
+              ))}
+            </div>
+
+            <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: CARD_COUNT }).map((_, i) => (
+              <div key={i} className="bg-panel p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <SkeletonText width="w-24" className="h-3.5" />
+                    <SkeletonText width="w-32" className="mt-1.5 h-2.5" />
+                  </div>
+
+                  <Skeleton className="h-4 w-16 shrink-0 rounded" />
+                </div>
+
+                <div className="mt-3 flex items-end justify-between">
+                  <div className="space-y-1.5">
+                    <SkeletonText width="w-10" className="h-3" />
+                    <SkeletonText width="w-14" className="h-3" />
+                  </div>
+
+                  <Skeleton className="h-6 w-16 rounded" />
+                </div>
+
+                <SkeletonText width="w-20" className="mt-2 h-2.5" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 </file>
@@ -1114,6 +1504,175 @@ export function Sparkline({
         className={warn ? "stroke-warning" : "stroke-ink-faint"}
       />
     </svg>
+  );
+}
+</file>
+
+<file path="components/team/TeamViewSkeleton.tsx">
+import {
+  Skeleton,
+  SkeletonCircle,
+  SkeletonText,
+} from "@/components/shared/Skeleton";
+
+const ROW_COUNT = 6;
+
+/**
+ * TeamPage's `loading.tsx` fallback (STREAMING_SSR_TODO.md), same role
+ * as the earlier view skeletons: a plain Server Component with zero
+ * queries of its own, shown the moment navigation starts while
+ * `team/page.tsx`'s server-side prefetch is still in flight, then
+ * swapped out for the real, already-hydrated `TeamView` once that
+ * resolves.
+ *
+ * Unlike `ServicesViewSkeleton`, no permission gap to work around
+ * here: `team/page.tsx` gates the whole *page* server-side
+ * (`canManageTeam` → `redirect()`), not just one button within an
+ * otherwise-shared view, so anyone who actually sees this fallback
+ * for more than an instant is already a Manager — the "Invite member"
+ * button is safe to render unconditionally. (A Member briefly sees
+ * this fallback too, for the instant before the page's own redirect
+ * resolves — same as any Suspense fallback ahead of a redirect — but
+ * it's structural only, no real names or emails, so there's nothing
+ * to leak.)
+ *
+ * Mirrors `TeamView`'s layout (header, search box, member rows shaped
+ * like the real row — avatar, name/email, role-select placeholder,
+ * remove-button placeholder). No filter pills here — `TeamView` only
+ * has the search box, unlike the ticket/incident/service/activity
+ * views.
+ */
+export function TeamViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-medium text-ink">Team</h1>
+          <SkeletonText width="w-24" className="mt-1.5 h-3" />
+        </div>
+
+        <div className="h-8 w-36 shrink-0 rounded-md bg-line-strong opacity-60" />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+        </div>
+
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {Array.from({ length: ROW_COUNT }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
+            >
+              <SkeletonCircle />
+
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3.5 w-28 rounded" />
+                <Skeleton className="mt-1.5 h-2.5 w-36 rounded" />
+              </div>
+
+              <Skeleton className="h-8 w-32 shrink-0 rounded-md" />
+              <Skeleton className="h-3 w-12 shrink-0 rounded" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/tickets/TicketsViewSkeleton.tsx">
+import {
+  Skeleton,
+  SkeletonCircle,
+  SkeletonText,
+} from "@/components/shared/Skeleton";
+import { ticketStatusMeta, type TicketStatus } from "@/types";
+
+const statusColumns: TicketStatus[] = [
+  "OPEN",
+  "IN_PROGRESS",
+  "BLOCKED",
+  "RESOLVED",
+];
+
+const ROW_COUNT = 6;
+
+/**
+ * TicketsPage's `loading.tsx` fallback (STREAMING_SSR_TODO.md), same
+ * role as DashboardSkeleton: a plain Server Component with zero
+ * queries of its own, shown the moment navigation starts while
+ * `tickets/page.tsx`'s server-side prefetch is still in flight, then
+ * swapped out for the real, already-hydrated `TicketsView` once that
+ * resolves.
+ *
+ * Mirrors `TicketsView`'s exact layout (header, filter bar, search
+ * box, list rows) so nothing shifts position when the real content
+ * replaces it. "New ticket" needs no click handler here — it's
+ * decorative until the real button replaces it. Filter labels are
+ * real text (they're static; only the count next to each is unknown
+ * yet), same convention as StatRow's `value: null` placeholder.
+ */
+export function TicketsViewSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-medium text-ink">Tickets</h1>
+          <SkeletonText width="w-16" className="mt-1.5 h-3" />
+        </div>
+
+        <div className="h-8 w-28 shrink-0 rounded-md bg-line-strong opacity-60" />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-1">
+              <div className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-ink-dim">
+                <span>All</span>
+                <Skeleton className="h-2.5 w-3 rounded-sm" />
+              </div>
+
+              {statusColumns.map((status) => (
+                <div
+                  key={status}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-ink-dim"
+                >
+                  <span>{ticketStatusMeta[status].label}</span>
+                  <Skeleton className="h-2.5 w-3 rounded-sm" />
+                </div>
+              ))}
+            </div>
+
+            <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+          </div>
+        </div>
+
+        <ul className="min-h-0 flex-1 overflow-y-auto">
+          {Array.from({ length: ROW_COUNT }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
+            >
+              <Skeleton className="size-1.5 shrink-0 rounded-full" />
+
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3.5 w-3/5 rounded" />
+                <Skeleton className="mt-1.5 h-2.5 w-20 rounded sm:hidden" />
+              </div>
+
+              <Skeleton className="hidden h-4 w-14 shrink-0 rounded sm:inline-block" />
+              <Skeleton className="hidden h-3 w-10 shrink-0 rounded md:inline-block" />
+
+              <SkeletonCircle />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
 </file>
@@ -3431,23 +3990,6 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
     "**/*.mts"
   ],
   "exclude": ["node_modules"]
-}
-</file>
-
-<file path="app/(dashboard)/activity/page.tsx">
-import { ActivityView } from "@/components/activity/ActivityView";
-
-// Milestone 6: activity is real now — ActivityView fetches it itself
-// via TanStack Query's useInfiniteQuery (listActivityAction as the
-// paginated queryFn, §10/AC-05), same self-fetching shape
-// IncidentsView/ServicesView already settled on, so this page no
-// longer needs the mock-data import or any props. No auth guard here
-// either: DashboardLayout (app/(dashboard)/layout.tsx) already gates
-// every route in this group, and ActivityView doesn't need a `self`
-// prop the way IncidentsView/ServicesView do.
-
-export default function ActivityPage() {
-  return <ActivityView />;
 }
 </file>
 
@@ -7605,32 +8147,81 @@ Each slice from #3 onward should re-run its relevant Playwright acceptance test 
 3. **Telemetry worker deployment target** — **resolved.** Long-lived process, in-process calls to the application layer (see §13).
 </file>
 
-<file path="app/(dashboard)/team/page.tsx">
-import { redirect } from "next/navigation";
-import { TeamView } from "@/components/team/TeamView";
-import { getCurrentUser } from "@/server/auth/session";
-import { canManageTeam } from "@/lib/permissions";
-import { PATHS } from "@/utils/paths";
+<file path="app/(dashboard)/activity/page.tsx">
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
+import { ActivityView } from "@/components/activity/ActivityView";
+import { listActivityAction } from "@/app/(dashboard)/activity/actions";
+import { listOrgUsersAction } from "@/app/(dashboard)/tickets/actions";
 
-// Milestone 10: the roster and pending invitations are real now —
-// `TeamView` self-fetches them (listOrgUsersAction /
-// listPendingInvitationsAction) the same way IncidentsView and
-// ServicesView do, so this page only resolves `self` and gates access.
+// Milestone 6: activity is real — ActivityView fetches it itself via
+// TanStack Query's useInfiniteQuery (listActivityAction as the
+// paginated queryFn, §10/AC-05), plus org users (listOrgUsersAction,
+// to resolve `actorId` → display name). No auth guard here either,
+// same reasoning as before: DashboardLayout already gates every route
+// in this group, and ActivityView doesn't need a `self` prop the way
+// IncidentsView/ServicesView do.
 //
-// The redirect below is the actual enforcement of the Manager-only gate
-// for the *page* (ROADMAP_ROLES.md Phase 3) — TopBar hiding the nav link
-// for Member is just the UX nicety on top of it. Every team *action* is
-// separately gated server-side (server/application/users.ts,
-// invitations.ts), so reaching the page isn't what protects the data.
-export default async function TeamPage() {
-  const self = await getCurrentUser();
-  if (!self) redirect(PATHS.LOGIN);
+// Streaming SSR follow-up (STREAMING_SSR_TODO.md): same "actually two
+// queries" correction as Tickets/Incidents/Services before it —
+// `["activity","list"]` (the infinite query) and `["org-users","list"]`
+// both get prefetched here, same keys `ActivityView` already uses.
+// The activity one is the first of these pages to need
+// `queryClient.infiniteQuery` instead of `queryClient.query` — same
+// deprecated-`prefetchQuery`-avoidance reasoning as the earlier pages
+// (see the note on the `TicketsView`/`DashboardView` entries in
+// STREAMING_SSR_TODO.md), just the infinite-query sibling of it.
+// `infiniteQuery` fetches only the first page unless told otherwise
+// (no `pages` option passed here), which is exactly what's wanted:
+// `ActivityView`'s own `useInfiniteQuery` — same `queryKey`,
+// `queryFn`, and `initialPageParam` — finds that first page already
+// cached on first client render (`isLoading` false immediately), then
+// drives `fetchNextPage()`/`hasNextPage` from there exactly as it
+// already does today. Note this is a *different* key from the
+// dashboard's own `["activity","list","recent"]` prefetch — that one
+// is `DashboardView`'s separate, non-paginated "recent activity"
+// query for its glance panel, not this one.
+//
+// `.catch(noop)` on both swallows a failed prefetch so `Promise.all`
+// still resolves; that query then hydrates as empty and
+// `ActivityView`'s own `isLoading`/`isError` branch for the activity
+// query takes over exactly as it already does today.
+//
+// The route's `loading.tsx` (ActivityViewSkeleton) is what makes this
+// "streaming": Next wraps this page in a Suspense boundary because
+// that file exists, so the shared layout (TopBar, nav) paints
+// immediately and that skeleton shows while the `Promise.all` below is
+// in flight, rather than the whole document waiting on it.
+const noop = () => {};
 
-  if (!canManageTeam(self.role)) {
-    redirect(PATHS.DASHBOARD);
-  }
+export default async function ActivityPage() {
+  const queryClient = new QueryClient();
 
-  return <TeamView self={self} />;
+  await Promise.all([
+    queryClient
+      .infiniteQuery({
+        queryKey: ["activity", "list"],
+        queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+          listActivityAction(pageParam),
+        initialPageParam: undefined as string | undefined,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["org-users", "list"],
+        queryFn: listOrgUsersAction,
+      })
+      .catch(noop),
+  ]);
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <ActivityView />
+    </HydrationBoundary>
+  );
 }
 </file>
 
@@ -8711,403 +9302,6 @@ export function TeamInviteModal({
         />
       </div>
     </Modal>
-  );
-}
-</file>
-
-<file path="components/team/TeamView.tsx">
-"use client";
-
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon } from "@phosphor-icons/react";
-import { Avatar } from "@/components/dashboard/Avatar";
-import { SearchInput } from "@/components/shared/SearchInput";
-import { SelectField } from "@/components/shared/SelectField";
-import {
-  TeamInviteModal,
-  type InviteFields,
-  type InviteResult,
-} from "@/components/team/TeamInviteModal";
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { useToast } from "@/components/shared/Toast";
-import { failureMessage, unwrap } from "@/lib/action-result";
-import { initialsFor } from "@/lib/initials";
-import { listOrgUsersAction } from "@/app/(dashboard)/tickets/actions";
-import {
-  deactivateMemberAction,
-  inviteMemberAction,
-  listPendingInvitationsAction,
-  revokeInvitationAction,
-  updateMemberRoleAction,
-} from "@/app/(dashboard)/team/actions";
-import { relativeTime } from "@/lib/style";
-import { useNow } from "@/lib/use-now";
-import type { PendingInvitation, Role, User } from "@/types";
-
-interface TeamViewProps {
-  self: User;
-}
-
-const roleOptions: { value: Role; label: string }[] = [
-  { value: "MEMBER", label: "Member" },
-  { value: "MANAGER", label: "Manager" },
-];
-
-const roleLabel = (role: Role) => (role === "MANAGER" ? "Manager" : "Member");
-
-// Stable fallbacks, same reasoning as the other views' EMPTY_* constants:
-// a fresh `?? []` every render would defeat the useMemo() below.
-const EMPTY_USERS: User[] = [];
-const EMPTY_INVITATIONS: PendingInvitation[] = [];
-
-// `["org-users", "list"]` is shared with TicketsView, IncidentsView,
-// PresenceRail and ActivityView on purpose — one roster, one cache entry,
-// and RealtimeProvider's `team.updated` handler invalidates it for all of
-// them at once.
-const USERS_KEY = ["org-users", "list"] as const;
-const INVITATIONS_KEY = ["team", "invitations"] as const;
-
-/**
- * Manager-only member list — invite, remove, change role — now backed by
- * real queries and Server Actions (Milestone 10), following the same
- * shape ServicesView/TicketsView settled on: self-fetching,
- * `unwrap()`ed mutations, `onError` toasts, invalidate on settle so the
- * server always wins.
- *
- * What "Remove" means changed: it deactivates the member (decision 2) —
- * they can't sign in any more, but the row and everything pointing at it
- * stays. Deactivated members are hidden here; they still resolve by name
- * everywhere history is shown.
- *
- * Role changes are optimistic with rollback; invites and removals are
- * not (an invite's result — the link — comes from the server, and a
- * removal is destructive enough to wait for confirmation that it
- * happened).
- *
- * The UI disabling your own row's controls is a courtesy — the server
- * enforces self-protection and the last-Manager rule itself (AUTH-07).
- */
-export function TeamView({ self }: TeamViewProps) {
-  const now = useNow();
-  const toast = useToast();
-  const queryClient = useQueryClient();
-
-  const [search, setSearch] = useState("");
-  const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
-  const [removeCandidate, setRemoveCandidate] = useState<User | null>(null);
-
-  const usersQuery = useQuery({
-    queryKey: USERS_KEY,
-    queryFn: listOrgUsersAction,
-  });
-  const invitationsQuery = useQuery({
-    queryKey: INVITATIONS_KEY,
-    queryFn: listPendingInvitationsAction,
-  });
-
-  const members = useMemo(
-    () => (usersQuery.data ?? EMPTY_USERS).filter((u) => u.active),
-    [usersQuery.data],
-  );
-  const invitations = invitationsQuery.data ?? EMPTY_INVITATIONS;
-
-  const query = search.trim().toLowerCase();
-
-  const filteredMembers = useMemo(() => {
-    const list = query
-      ? members.filter(
-          (u) =>
-            u.name.toLowerCase().includes(query) ||
-            u.email.toLowerCase().includes(query),
-        )
-      : members;
-
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [members, query]);
-
-  const filteredInvitations = useMemo(
-    () =>
-      query
-        ? invitations.filter(
-            (i) =>
-              i.name.toLowerCase().includes(query) ||
-              i.email.toLowerCase().includes(query),
-          )
-        : invitations,
-    [invitations, query],
-  );
-
-  const invalidateTeam = () => {
-    queryClient.invalidateQueries({ queryKey: USERS_KEY });
-    queryClient.invalidateQueries({ queryKey: INVITATIONS_KEY });
-  };
-
-  const inviteMutation = useMutation({
-    mutationFn: async (fields: InviteFields) =>
-      unwrap(await inviteMemberAction(fields)),
-    onSuccess: ({ invitation, token }) => {
-      invalidateTeam();
-      setInviteResult({
-        email: invitation.email,
-        link: `${window.location.origin}/invite/${token}`,
-      });
-    },
-    onError: (error) =>
-      toast.show(failureMessage(error, "created", "invitation"), "error"),
-  });
-
-  const revokeMutation = useMutation({
-    mutationFn: async (invitation: PendingInvitation) =>
-      unwrap(await revokeInvitationAction(invitation.id)),
-    onSuccess: (_data, invitation) =>
-      toast.show(`Invitation to ${invitation.email} revoked`),
-    onError: (error) =>
-      toast.show(failureMessage(error, "updated", "invitation"), "error"),
-    onSettled: invalidateTeam,
-  });
-
-  const roleMutation = useMutation({
-    mutationFn: async ({ user, role }: { user: User; role: Role }) =>
-      unwrap(await updateMemberRoleAction(user.id, { role })),
-
-    onMutate: async ({ user, role }) => {
-      await queryClient.cancelQueries({ queryKey: USERS_KEY });
-      const previous = queryClient.getQueryData<User[]>(USERS_KEY);
-
-      queryClient.setQueryData<User[]>(USERS_KEY, (old) =>
-        old?.map((u) => (u.id === user.id ? { ...u, role } : u)),
-      );
-
-      return { previous };
-    },
-
-    onSuccess: (_data, { user, role }) =>
-      toast.show(`${user.name}'s role changed to ${roleLabel(role)}`),
-
-    onError: (error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(USERS_KEY, context.previous);
-      }
-      // The server's own message is the useful one here (last-Manager
-      // rule, "not a Manager any more", …) — failureMessage passes an
-      // ActionFailure's message straight through.
-      toast.show(failureMessage(error, "updated", "member"), "error");
-    },
-
-    onSettled: invalidateTeam,
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: async (user: User) =>
-      unwrap(await deactivateMemberAction(user.id)),
-    onSuccess: (user) => toast.show(`${user.name} removed from the team`),
-    onError: (error) =>
-      toast.show(failureMessage(error, "updated", "member"), "error"),
-    onSettled: invalidateTeam,
-  });
-
-  const closeInvite = () => {
-    setInviting(false);
-    setInviteResult(null);
-  };
-
-  const isLoading = usersQuery.isLoading;
-  const nothingToShow =
-    filteredMembers.length === 0 && filteredInvitations.length === 0;
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex shrink-0 items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-medium text-ink">Team</h1>
-          <p className="text-sm text-ink-dim">
-            {members.length} {members.length === 1 ? "member" : "members"}
-            {invitations.length > 0 && ` · ${invitations.length} pending`}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setInviting(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-bg transition-opacity hover:opacity-90"
-        >
-          <PlusIcon size={14} weight="bold" />
-          Invite member
-        </button>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="shrink-0 border-b border-line px-4 py-3">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search team"
-          />
-        </div>
-
-        {isLoading ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-ink-dim">
-            Loading team…
-          </div>
-        ) : usersQuery.isError ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-danger">
-            Couldn&apos;t load the team.{" "}
-            <button
-              type="button"
-              onClick={() => usersQuery.refetch()}
-              className="underline hover:text-ink"
-            >
-              Try again
-            </button>
-          </div>
-        ) : nothingToShow ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-ink-dim">
-            No members match your search.
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ul>
-              {filteredMembers.map((user) => {
-                const isSelf = user.id === self.id;
-
-                return (
-                  <li
-                    key={user.id}
-                    className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-                  >
-                    <Avatar
-                      initials={user.initials}
-                      seed={user.id}
-                      title={user.name}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm text-ink">
-                          {user.name}
-                        </span>
-                        {isSelf && (
-                          <span className="shrink-0 rounded bg-panel-raised px-1.5 py-0.5 text-[10px] text-ink-faint">
-                            You
-                          </span>
-                        )}
-                      </div>
-                      <div className="truncate text-xs text-ink-faint">
-                        {user.email}
-                      </div>
-                    </div>
-
-                    <div className="w-32 shrink-0">
-                      <SelectField
-                        label="Role"
-                        hideLabel
-                        value={user.role}
-                        onChange={(value) =>
-                          roleMutation.mutate({ user, role: value as Role })
-                        }
-                        options={roleOptions}
-                        disabled={isSelf}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setRemoveCandidate(user)}
-                      disabled={isSelf}
-                      title={
-                        isSelf
-                          ? "You can't remove yourself"
-                          : "Remove from team"
-                      }
-                      className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-ink-faint transition-colors hover:text-danger disabled:opacity-30 disabled:hover:text-ink-faint"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {filteredInvitations.length > 0 && (
-              <>
-                <div className="border-y border-line bg-panel-raised/50 px-4 py-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
-                  Pending invitations
-                </div>
-
-                <ul>
-                  {filteredInvitations.map((invitation) => (
-                    <li
-                      key={invitation.id}
-                      className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
-                    >
-                      <span
-                        className="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed border-line-strong text-[10px] text-ink-faint"
-                        aria-hidden
-                      >
-                        {initialsFor(invitation.name)}
-                      </span>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate text-sm text-ink-dim">
-                            {invitation.name}
-                          </span>
-                          <span className="shrink-0 rounded bg-panel-raised px-1.5 py-0.5 text-[10px] text-ink-faint">
-                            Pending
-                          </span>
-                        </div>
-                        <div className="truncate text-xs text-ink-faint">
-                          {invitation.email} · expires{" "}
-                          {new Date(invitation.expiresAt).toLocaleDateString()}
-                        </div>
-                      </div>
-
-                      <span className="w-32 shrink-0 text-sm text-ink-dim">
-                        {roleLabel(invitation.role)}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => revokeMutation.mutate(invitation)}
-                        disabled={revokeMutation.isPending}
-                        title={`Sent ${relativeTime(invitation.createdAt, now)}`}
-                        className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
-                      >
-                        Revoke
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {inviting && (
-        <TeamInviteModal
-          onClose={closeInvite}
-          onInvite={(fields) => inviteMutation.mutate(fields)}
-          saving={inviteMutation.isPending}
-          result={inviteResult}
-        />
-      )}
-
-      {removeCandidate && (
-        <ConfirmDialog
-          title="Remove team member?"
-          message={`${removeCandidate.name} won't be able to sign in again. Their past tickets, incidents and activity stay on the record. A session they already have open can keep working for up to 15 minutes.`}
-          confirmLabel="Remove member"
-          onConfirm={() => {
-            removeMutation.mutate(removeCandidate);
-            setRemoveCandidate(null);
-          }}
-          onCancel={() => setRemoveCandidate(null)}
-        />
-      )}
-    </div>
   );
 }
 </file>
@@ -10268,123 +10462,495 @@ export const PATHS = {
 };
 </file>
 
-<file path="app/(dashboard)/dashboard/page.tsx">
+<file path="app/(dashboard)/team/page.tsx">
+import { redirect } from "next/navigation";
 import {
   QueryClient,
   HydrationBoundary,
   dehydrate,
 } from "@tanstack/react-query";
-import { DashboardView } from "@/components/dashboard/DashboardView";
-import {
-  listOrgUsersAction,
-  listTicketsAction,
-} from "@/app/(dashboard)/tickets/actions";
-import { listIncidentsAction } from "@/app/(dashboard)/incidents/actions";
-import { listServicesAction } from "@/app/(dashboard)/services/actions";
-import { listActivityAction } from "@/app/(dashboard)/activity/actions";
+import { TeamView } from "@/components/team/TeamView";
+import { getCurrentUser } from "@/server/auth/session";
+import { canManageTeam } from "@/lib/permissions";
+import { PATHS } from "@/utils/paths";
+import { listOrgUsersAction } from "@/app/(dashboard)/tickets/actions";
+import { listPendingInvitationsAction } from "@/app/(dashboard)/team/actions";
 
-// Milestone 9 → streaming SSR follow-up (STREAMING_SSR_TODO.md): the
-// dashboard's 5 queries used to start with an empty client-side cache
-// every cold load — each panel would render its loading state, then
-// swap to real content once its `useQuery` resolved, causing the
-// layout flicker/shift this was written to fix. This page now
-// prefetches all 5 on the server, in parallel, into a request-scoped
-// `QueryClient` (never the shared client one from QueryProvider — a
-// fresh instance per request is the documented pattern, since this
-// runs during SSR, not in the browser), then dehydrates that cache
-// into `<HydrationBoundary>` around the unchanged `DashboardView`.
+// Milestone 10: the roster and pending invitations are real now —
+// `TeamView` self-fetches them (listOrgUsersAction /
+// listPendingInvitationsAction) the same way IncidentsView and
+// ServicesView do, so this page only resolves `self`, gates access,
+// and (as of this streaming SSR pass) prefetches both queries.
 //
-// `DashboardView` still calls `useQuery` with the exact same keys —
-// it finds the data already there on first client render instead of
-// fetching it, so `isLoading` is false immediately. If a prefetch
-// fails, `dehydrate()`'s default `shouldDehydrateQuery` only carries
-// over *successful* queries, so a failed one hydrates as empty and
-// `DashboardView`'s own `isLoading`/`isError` handling (see
-// StatRow/IncidentsPanel/ServiceHealthGrid/TicketBoard/ActivityFeed's
-// `error` props) takes over exactly as it already does today — no
-// special-casing needed here for that.
+// The redirect below is the actual enforcement of the Manager-only gate
+// for the *page* (ROADMAP_ROLES.md Phase 3) — TopBar hiding the nav link
+// for Member is just the UX nicety on top of it. Every team *action* is
+// separately gated server-side (server/application/users.ts,
+// invitations.ts), so reaching the page isn't what protects the data.
 //
-// The route's `loading.tsx` (DashboardSkeleton) is what actually makes
-// this "streaming": Next wraps this page in a Suspense boundary because
+// Streaming SSR follow-up (STREAMING_SSR_TODO.md): unlike
+// Tickets/Incidents/Services/Activity before it, the TODO's original
+// "two queries" note for this one was already accurate —
+// `["org-users","list"]` (shared with every other view that queries
+// the roster) and `["team","invitations"]`. Both get prefetched here
+// in parallel, same keys `TeamView` already uses,
+// `queryClient.query(...).catch(noop)` from the start (not the
+// deprecated `prefetchQuery` — see the note on the earlier entries in
+// STREAMING_SSR_TODO.md), into a request-scoped `QueryClient`,
+// dehydrated into `<HydrationBoundary>` around the unchanged
+// `TeamView`.
+//
+// `TeamView` still calls `useQuery` with the exact same two keys — it
+// finds the data already in cache on first client render instead of
+// fetching it, so `isLoading` is false immediately. `.catch(noop)` on
+// each swallows a failed prefetch so `Promise.all` still resolves;
+// that query then hydrates as empty and `TeamView`'s own
+// `isLoading`/`isError` branch for the users query takes over exactly
+// as it already does today.
+//
+// The route's `loading.tsx` (TeamViewSkeleton) is what makes this
+// "streaming": Next wraps this page in a Suspense boundary because
 // that file exists, so the shared layout (TopBar, nav) paints
-// immediately and that skeleton shows while the `Promise.all` below is
-// in flight, rather than the whole document waiting on it.
-//
-// No auth guard here either, same reasoning as before: DashboardLayout
-// (app/(dashboard)/layout.tsx) already gates every route in this group,
-// and none of these queries need `self` — every panel is read-only.
-export default async function DashboardPage() {
+// immediately and that skeleton shows while `getCurrentUser()` and the
+// `Promise.all` below are still in flight, rather than the whole
+// document waiting on either.
+const noop = () => {};
+
+export default async function TeamPage() {
+  const self = await getCurrentUser();
+  if (!self) redirect(PATHS.LOGIN);
+
+  if (!canManageTeam(self.role)) {
+    redirect(PATHS.DASHBOARD);
+  }
+
   const queryClient = new QueryClient();
 
   await Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: ["tickets", "list"],
-      queryFn: listTicketsAction,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ["incidents", "list"],
-      queryFn: listIncidentsAction,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ["services", "list"],
-      queryFn: listServicesAction,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ["org-users", "list"],
-      queryFn: listOrgUsersAction,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ["activity", "list", "recent"],
-      queryFn: () => listActivityAction(),
-    }),
+    queryClient
+      .query({
+        queryKey: ["org-users", "list"],
+        queryFn: listOrgUsersAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["team", "invitations"],
+        queryFn: listPendingInvitationsAction,
+      })
+      .catch(noop),
   ]);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <DashboardView />
+      <TeamView self={self} />
     </HydrationBoundary>
   );
 }
 </file>
 
-<file path="app/(dashboard)/incidents/page.tsx">
-import { redirect } from "next/navigation";
-import { IncidentsView } from "@/components/incidents/IncidentsView";
-import { getCurrentUser } from "@/server/auth/session";
-import { PATHS } from "@/utils/paths";
+<file path="components/team/TeamView.tsx">
+"use client";
 
-// Milestone 5: incidents (plus the services/tickets/users it links
-// against) are real now — IncidentsView fetches all of that itself via
-// TanStack Query, same as TicketsView/ServicesView, rather than this
-// Server Component threading mock-data props through. `self` is the one
-// thing that still comes from here: it's already a real session lookup
-// (Milestone 1) and IncidentsView needs it to attribute "Respond" to
-// the actual signed-in user.
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PlusIcon } from "@phosphor-icons/react";
+import { Avatar } from "@/components/dashboard/Avatar";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { SelectField } from "@/components/shared/SelectField";
+import {
+  TeamInviteModal,
+  type InviteFields,
+  type InviteResult,
+} from "@/components/team/TeamInviteModal";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { useToast } from "@/components/shared/Toast";
+import { failureMessage, unwrap } from "@/lib/action-result";
+import { initialsFor } from "@/lib/initials";
+import { listOrgUsersAction } from "@/app/(dashboard)/tickets/actions";
+import {
+  deactivateMemberAction,
+  inviteMemberAction,
+  listPendingInvitationsAction,
+  revokeInvitationAction,
+  updateMemberRoleAction,
+} from "@/app/(dashboard)/team/actions";
+import { relativeTime } from "@/lib/style";
+import { useNow } from "@/lib/use-now";
+import type { PendingInvitation, Role, User } from "@/types";
 
-export default async function IncidentsPage() {
-  const self = await getCurrentUser();
-  if (!self) redirect(PATHS.LOGIN);
-
-  return <IncidentsView self={self} />;
+interface TeamViewProps {
+  self: User;
 }
-</file>
 
-<file path="app/(dashboard)/tickets/page.tsx">
-import { redirect } from "next/navigation";
-import { TicketsView } from "@/components/tickets/TicketsView";
-import { getCurrentUser } from "@/server/auth/session";
-import { PATHS } from "@/utils/paths";
+const roleOptions: { value: Role; label: string }[] = [
+  { value: "MEMBER", label: "Member" },
+  { value: "MANAGER", label: "Manager" },
+];
 
-// Milestone 2: tickets are real now — TicketsView fetches them itself
-// via TanStack Query (listTicketsAction as the queryFn, §10), so this
-// page no longer needs to fetch or pass ticket data down at all. `self`
-// still comes from the session, same as every other dashboard page.
+const roleLabel = (role: Role) => (role === "MANAGER" ? "Manager" : "Member");
 
-export default async function TicketsPage() {
-  const self = await getCurrentUser();
-  if (!self) redirect(PATHS.LOGIN);
+// Stable fallbacks, same reasoning as the other views' EMPTY_* constants:
+// a fresh `?? []` every render would defeat the useMemo() below.
+const EMPTY_USERS: User[] = [];
+const EMPTY_INVITATIONS: PendingInvitation[] = [];
 
-  return <TicketsView self={self} />;
+// `["org-users", "list"]` is shared with TicketsView, IncidentsView,
+// PresenceRail and ActivityView on purpose — one roster, one cache entry,
+// and RealtimeProvider's `team.updated` handler invalidates it for all of
+// them at once.
+const USERS_KEY = ["org-users", "list"] as const;
+const INVITATIONS_KEY = ["team", "invitations"] as const;
+
+/**
+ * Manager-only member list — invite, remove, change role — now backed by
+ * real queries and Server Actions (Milestone 10), following the same
+ * shape ServicesView/TicketsView settled on: self-fetching,
+ * `unwrap()`ed mutations, `onError` toasts, invalidate on settle so the
+ * server always wins.
+ *
+ * What "Remove" means changed: it deactivates the member (decision 2) —
+ * they can't sign in any more, but the row and everything pointing at it
+ * stays. Deactivated members are hidden here; they still resolve by name
+ * everywhere history is shown.
+ *
+ * Role changes are optimistic with rollback; invites and removals are
+ * not (an invite's result — the link — comes from the server, and a
+ * removal is destructive enough to wait for confirmation that it
+ * happened).
+ *
+ * The UI disabling your own row's controls is a courtesy — the server
+ * enforces self-protection and the last-Manager rule itself (AUTH-07).
+ */
+export function TeamView({ self }: TeamViewProps) {
+  const now = useNow();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+
+  const [search, setSearch] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [removeCandidate, setRemoveCandidate] = useState<User | null>(null);
+
+  const usersQuery = useQuery({
+    queryKey: USERS_KEY,
+    queryFn: listOrgUsersAction,
+  });
+  const invitationsQuery = useQuery({
+    queryKey: INVITATIONS_KEY,
+    queryFn: listPendingInvitationsAction,
+  });
+
+  const members = useMemo(
+    () => (usersQuery.data ?? EMPTY_USERS).filter((u) => u.active),
+    [usersQuery.data],
+  );
+  const invitations = invitationsQuery.data ?? EMPTY_INVITATIONS;
+
+  const query = search.trim().toLowerCase();
+
+  const filteredMembers = useMemo(() => {
+    const list = query
+      ? members.filter(
+          (u) =>
+            u.name.toLowerCase().includes(query) ||
+            u.email.toLowerCase().includes(query),
+        )
+      : members;
+
+    // You first, same convention as PresenceRail ("You first, then
+    // everyone online, then everyone else" — no presence here, so
+    // just "You first"), then everyone else alphabetically. Array#sort
+    // is stable, so the `|| a.name.localeCompare(b.name)` only breaks
+    // ties within each rank rather than re-ordering the whole list.
+    const rank = (u: User) => (u.id === self.id ? 0 : 1);
+    return [...list].sort(
+      (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name),
+    );
+  }, [members, query, self.id]);
+
+  const filteredInvitations = useMemo(
+    () =>
+      query
+        ? invitations.filter(
+            (i) =>
+              i.name.toLowerCase().includes(query) ||
+              i.email.toLowerCase().includes(query),
+          )
+        : invitations,
+    [invitations, query],
+  );
+
+  const invalidateTeam = () => {
+    queryClient.invalidateQueries({ queryKey: USERS_KEY });
+    queryClient.invalidateQueries({ queryKey: INVITATIONS_KEY });
+  };
+
+  const inviteMutation = useMutation({
+    mutationFn: async (fields: InviteFields) =>
+      unwrap(await inviteMemberAction(fields)),
+    onSuccess: ({ invitation, token }) => {
+      invalidateTeam();
+      setInviteResult({
+        email: invitation.email,
+        link: `${window.location.origin}/invite/${token}`,
+      });
+    },
+    onError: (error) =>
+      toast.show(failureMessage(error, "created", "invitation"), "error"),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (invitation: PendingInvitation) =>
+      unwrap(await revokeInvitationAction(invitation.id)),
+    onSuccess: (_data, invitation) =>
+      toast.show(`Invitation to ${invitation.email} revoked`),
+    onError: (error) =>
+      toast.show(failureMessage(error, "updated", "invitation"), "error"),
+    onSettled: invalidateTeam,
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: async ({ user, role }: { user: User; role: Role }) =>
+      unwrap(await updateMemberRoleAction(user.id, { role })),
+
+    onMutate: async ({ user, role }) => {
+      await queryClient.cancelQueries({ queryKey: USERS_KEY });
+      const previous = queryClient.getQueryData<User[]>(USERS_KEY);
+
+      queryClient.setQueryData<User[]>(USERS_KEY, (old) =>
+        old?.map((u) => (u.id === user.id ? { ...u, role } : u)),
+      );
+
+      return { previous };
+    },
+
+    onSuccess: (_data, { user, role }) =>
+      toast.show(`${user.name}'s role changed to ${roleLabel(role)}`),
+
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(USERS_KEY, context.previous);
+      }
+      // The server's own message is the useful one here (last-Manager
+      // rule, "not a Manager any more", …) — failureMessage passes an
+      // ActionFailure's message straight through.
+      toast.show(failureMessage(error, "updated", "member"), "error");
+    },
+
+    onSettled: invalidateTeam,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (user: User) =>
+      unwrap(await deactivateMemberAction(user.id)),
+    onSuccess: (user) => toast.show(`${user.name} removed from the team`),
+    onError: (error) =>
+      toast.show(failureMessage(error, "updated", "member"), "error"),
+    onSettled: invalidateTeam,
+  });
+
+  const closeInvite = () => {
+    setInviting(false);
+    setInviteResult(null);
+  };
+
+  const isLoading = usersQuery.isLoading;
+  const nothingToShow =
+    filteredMembers.length === 0 && filteredInvitations.length === 0;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-medium text-ink">Team</h1>
+          <p className="text-sm text-ink-dim">
+            {members.length} {members.length === 1 ? "member" : "members"}
+            {invitations.length > 0 && ` · ${invitations.length} pending`}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setInviting(true)}
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-bg transition-opacity hover:opacity-90"
+        >
+          <PlusIcon size={14} weight="bold" />
+          Invite member
+        </button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="shrink-0 border-b border-line px-4 py-3">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search team"
+          />
+        </div>
+
+        {isLoading ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-ink-dim">
+            Loading team…
+          </div>
+        ) : usersQuery.isError ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-danger">
+            Couldn&apos;t load the team.{" "}
+            <button
+              type="button"
+              onClick={() => usersQuery.refetch()}
+              className="underline hover:text-ink"
+            >
+              Try again
+            </button>
+          </div>
+        ) : nothingToShow ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 text-center text-sm text-ink-dim">
+            No members match your search.
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ul>
+              {filteredMembers.map((user) => {
+                const isSelf = user.id === self.id;
+
+                return (
+                  <li
+                    key={user.id}
+                    className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
+                  >
+                    <Avatar
+                      initials={user.initials}
+                      seed={user.id}
+                      title={user.name}
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm text-ink">
+                          {user.name}
+                        </span>
+                        {isSelf && (
+                          <span className="shrink-0 rounded bg-panel-raised px-1.5 py-0.5 text-[10px] text-ink-faint">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-xs text-ink-faint">
+                        {user.email}
+                      </div>
+                    </div>
+
+                    <div className="w-32 shrink-0">
+                      <SelectField
+                        label="Role"
+                        hideLabel
+                        value={user.role}
+                        onChange={(value) =>
+                          roleMutation.mutate({ user, role: value as Role })
+                        }
+                        options={roleOptions}
+                        disabled={isSelf}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setRemoveCandidate(user)}
+                      disabled={isSelf}
+                      title={
+                        isSelf
+                          ? "You can't remove yourself"
+                          : "Remove from team"
+                      }
+                      className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-ink-faint transition-colors hover:text-danger disabled:opacity-30 disabled:hover:text-ink-faint"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {filteredInvitations.length > 0 && (
+              <>
+                <div className="border-y border-line bg-panel-raised/50 px-4 py-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                  Pending invitations
+                </div>
+
+                <ul>
+                  {filteredInvitations.map((invitation) => (
+                    <li
+                      key={invitation.id}
+                      className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0"
+                    >
+                      <span
+                        className="flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed border-line-strong text-[10px] text-ink-faint"
+                        aria-hidden
+                      >
+                        {initialsFor(invitation.name)}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm text-ink-dim">
+                            {invitation.name}
+                          </span>
+                          <span className="shrink-0 rounded bg-panel-raised px-1.5 py-0.5 text-[10px] text-ink-faint">
+                            Pending
+                          </span>
+                        </div>
+                        <div className="truncate text-xs text-ink-faint">
+                          {invitation.email} · expires{" "}
+                          {new Date(invitation.expiresAt).toLocaleDateString()}
+                        </div>
+                      </div>
+
+                      <span className="w-32 shrink-0 text-sm text-ink-dim">
+                        {roleLabel(invitation.role)}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => revokeMutation.mutate(invitation)}
+                        disabled={revokeMutation.isPending}
+                        title={`Sent ${relativeTime(invitation.createdAt, now)}`}
+                        className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-ink-faint transition-colors hover:text-danger disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {inviting && (
+        <TeamInviteModal
+          onClose={closeInvite}
+          onInvite={(fields) => inviteMutation.mutate(fields)}
+          saving={inviteMutation.isPending}
+          result={inviteResult}
+        />
+      )}
+
+      {removeCandidate && (
+        <ConfirmDialog
+          title="Remove team member?"
+          message={`${removeCandidate.name} won't be able to sign in again. Their past tickets, incidents and activity stay on the record. A session they already have open can keep working for up to 15 minutes.`}
+          confirmLabel="Remove member"
+          onConfirm={() => {
+            removeMutation.mutate(removeCandidate);
+            setRemoveCandidate(null);
+          }}
+          onCancel={() => setRemoveCandidate(null)}
+        />
+      )}
+    </div>
+  );
 }
 </file>
 
@@ -11481,27 +12047,279 @@ model Activity {
 }
 </file>
 
-<file path="app/(dashboard)/services/page.tsx">
+<file path="app/(dashboard)/dashboard/page.tsx">
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
+import { DashboardView } from "@/components/dashboard/DashboardView";
+import {
+  listOrgUsersAction,
+  listTicketsAction,
+} from "@/app/(dashboard)/tickets/actions";
+import { listIncidentsAction } from "@/app/(dashboard)/incidents/actions";
+import { listServicesAction } from "@/app/(dashboard)/services/actions";
+import { listActivityAction } from "@/app/(dashboard)/activity/actions";
+
+// Milestone 9 → streaming SSR follow-up (STREAMING_SSR_TODO.md): the
+// dashboard's 5 queries used to start with an empty client-side cache
+// every cold load — each panel would render its loading state, then
+// swap to real content once its `useQuery` resolved, causing the
+// layout flicker/shift this was written to fix. This page now
+// prefetches all 5 on the server, in parallel, into a request-scoped
+// `QueryClient` (never the shared client one from QueryProvider — a
+// fresh instance per request is the documented pattern, since this
+// runs during SSR, not in the browser), then dehydrates that cache
+// into `<HydrationBoundary>` around the unchanged `DashboardView`.
+//
+// `DashboardView` still calls `useQuery` with the exact same keys —
+// it finds the data already there on first client render instead of
+// fetching it, so `isLoading` is false immediately. If a prefetch
+// fails, the `.catch(noop)` below swallows it so `Promise.all` still
+// resolves; that query then hydrates as empty (dehydrate() only
+// carries over successful queries) and `DashboardView`'s own
+// `isLoading`/`isError` handling (see
+// StatRow/IncidentsPanel/ServiceHealthGrid/TicketBoard/ActivityFeed's
+// `error` props) takes over exactly as it already does today — no
+// special-casing needed here for that.
+//
+// The route's `loading.tsx` (DashboardSkeleton) is what actually makes
+// this "streaming": Next wraps this page in a Suspense boundary because
+// that file exists, so the shared layout (TopBar, nav) paints
+// immediately and that skeleton shows while the `Promise.all` below is
+// in flight, rather than the whole document waiting on it.
+//
+// No auth guard here either, same reasoning as before: DashboardLayout
+// (app/(dashboard)/layout.tsx) already gates every route in this group,
+// and none of these queries need `self` — every panel is read-only.
+//
+// `queryClient.prefetchQuery` is deprecated as of the installed
+// TanStack Query version (5.103.2) in favor of `queryClient.query`,
+// which fetches/caches the same way but *throws* on failure instead of
+// swallowing the error — hence the `.catch(noop)` on each call below,
+// which is exactly what the deprecation notice itself recommends to
+// keep one failed query from sinking the whole `Promise.all`.
+const noop = () => {};
+
+export default async function DashboardPage() {
+  const queryClient = new QueryClient();
+
+  await Promise.all([
+    queryClient
+      .query({
+        queryKey: ["tickets", "list"],
+        queryFn: listTicketsAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["incidents", "list"],
+        queryFn: listIncidentsAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["services", "list"],
+        queryFn: listServicesAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["org-users", "list"],
+        queryFn: listOrgUsersAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["activity", "list", "recent"],
+        queryFn: () => listActivityAction(),
+      })
+      .catch(noop),
+  ]);
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <DashboardView />
+    </HydrationBoundary>
+  );
+}
+</file>
+
+<file path="app/(dashboard)/incidents/page.tsx">
 import { redirect } from "next/navigation";
-import { ServicesView } from "@/components/services/ServicesView";
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
+import { IncidentsView } from "@/components/incidents/IncidentsView";
 import { getCurrentUser } from "@/server/auth/session";
 import { PATHS } from "@/utils/paths";
+import { listIncidentsAction } from "@/app/(dashboard)/incidents/actions";
+import { listServicesAction } from "@/app/(dashboard)/services/actions";
+import {
+  listOrgUsersAction,
+  listTicketsAction,
+} from "@/app/(dashboard)/tickets/actions";
 
-// Milestone 4: services are real — ServicesView fetches them itself via
-// TanStack Query (listServicesAction as the queryFn, §10), same as
-// TicketsView, so this page doesn't fetch or pass service data down.
-// Milestone 5: incidents are real too now, and ServicesView fetches
-// those itself as well (listIncidentsAction) to show which active
-// incidents affect a given service — this page no longer threads mock
-// incident data through either. `self` still comes from the session and
-// gates the Manager-only "New service" / edit affordances
-// (lib/permissions.ts#canManageServices).
+// Milestone 5: incidents (plus the services/tickets/users it links
+// against) are real now — IncidentsView fetches all of that itself via
+// TanStack Query. `self` still comes from the session, same as every
+// other dashboard page — IncidentsView needs it to attribute "Respond"
+// to the actual signed-in user.
+//
+// Streaming SSR follow-up (STREAMING_SSR_TODO.md): IncidentsView
+// actually runs *four* queries, not the one originally scoped for this
+// item — `["incidents","list"]` for the list itself, plus
+// `["services","list"]`, `["tickets","list"]`, and `["org-users","list"]`
+// for the checklist/responder pickers in IncidentModal and for
+// rendering each row's affected-services/linked-tickets summary. All
+// four get prefetched here, same keys IncidentsView already uses, same
+// request-scoped `QueryClient` pattern as Tickets/Dashboard: never the
+// shared client-side instance from QueryProvider, a fresh one per
+// request, dehydrated into `<HydrationBoundary>` around the unchanged
+// `IncidentsView`.
+//
+// `IncidentsView` still calls `useQuery` with the exact same four
+// keys — it finds the data already in cache on first client render
+// instead of fetching it, so `isLoading` is false immediately for all
+// of them. `.catch(noop)` on each swallows a failed prefetch so
+// `Promise.all` still resolves; that query then hydrates as empty and
+// `IncidentsView`'s own `isLoading`/`isError` branch for the incidents
+// query takes over exactly as it already does today.
+//
+// `queryClient.query` (not the deprecated `prefetchQuery`) from the
+// start here — see the note left on the `TicketsView`/`DashboardView`
+// entries in STREAMING_SSR_TODO.md about why.
+//
+// The route's `loading.tsx` (IncidentsViewSkeleton) is what makes this
+// "streaming": Next wraps this page in a Suspense boundary because
+// that file exists, so the shared layout (TopBar, nav) paints
+// immediately and that skeleton shows while the `Promise.all` below is
+// in flight, rather than the whole document waiting on it.
+const noop = () => {};
 
-export default async function ServicesPage() {
+export default async function IncidentsPage() {
   const self = await getCurrentUser();
   if (!self) redirect(PATHS.LOGIN);
 
-  return <ServicesView self={self} />;
+  const queryClient = new QueryClient();
+
+  await Promise.all([
+    queryClient
+      .query({
+        queryKey: ["incidents", "list"],
+        queryFn: listIncidentsAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["services", "list"],
+        queryFn: listServicesAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["tickets", "list"],
+        queryFn: listTicketsAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["org-users", "list"],
+        queryFn: listOrgUsersAction,
+      })
+      .catch(noop),
+  ]);
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <IncidentsView self={self} />
+    </HydrationBoundary>
+  );
+}
+</file>
+
+<file path="app/(dashboard)/tickets/page.tsx">
+import { redirect } from "next/navigation";
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
+import { TicketsView } from "@/components/tickets/TicketsView";
+import { getCurrentUser } from "@/server/auth/session";
+import { PATHS } from "@/utils/paths";
+import {
+  listOrgUsersAction,
+  listTicketsAction,
+} from "@/app/(dashboard)/tickets/actions";
+
+// Milestone 2: tickets are real now — TicketsView fetches them itself
+// via TanStack Query (listTicketsAction as the queryFn, §10). `self`
+// still comes from the session, same as every other dashboard page.
+//
+// Streaming SSR follow-up (STREAMING_SSR_TODO.md): TicketsView actually
+// runs two queries — `["tickets","list"]` for the list itself and
+// `["org-users","list"]` to resolve assignees/render the "Assign to
+// me" picker — so both get prefetched here, same as dashboard/page.tsx
+// prefetches "org-users" alongside its other four. Doing only the
+// tickets query would still flicker every assignee avatar in on a
+// cold load.
+//
+// Same request-scoped `QueryClient` pattern as the dashboard: never
+// the shared client-side instance from QueryProvider, a fresh one per
+// request, dehydrated into `<HydrationBoundary>` around the unchanged
+// `TicketsView`. `TicketsView` still calls `useQuery` with the exact
+// same two keys — it finds the data already in cache on first client
+// render instead of fetching it, so `isLoading` is false immediately.
+// If a prefetch fails, the `.catch(noop)` below (per this TanStack
+// Query version's own deprecation note — see below) swallows it so
+// `Promise.all` still resolves; that query then hydrates as empty and
+// `TicketsView`'s own `isLoading`/`isError` branch for the tickets
+// query takes over exactly as it already does today.
+//
+// The route's `loading.tsx` (TicketsViewSkeleton) is what makes this
+// "streaming": Next wraps this page in a Suspense boundary because
+// that file exists, so the shared layout (TopBar, nav) paints
+// immediately and that skeleton shows while the `Promise.all` below is
+// in flight, rather than the whole document waiting on it.
+//
+// `queryClient.prefetchQuery` is deprecated as of this installed
+// version (5.103.2) in favor of `queryClient.query`, which fetches and
+// caches the same way but *throws* on failure instead of swallowing
+// the error — so `.catch(noop)` here is what restores the old
+// "one failed prefetch doesn't sink the others" behavior; it's the
+// exact fix the deprecation notice itself points to, not a workaround.
+const noop = () => {};
+
+export default async function TicketsPage() {
+  const self = await getCurrentUser();
+  if (!self) redirect(PATHS.LOGIN);
+
+  const queryClient = new QueryClient();
+
+  await Promise.all([
+    queryClient
+      .query({
+        queryKey: ["tickets", "list"],
+        queryFn: listTicketsAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["org-users", "list"],
+        queryFn: listOrgUsersAction,
+      })
+      .catch(noop),
+  ]);
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <TicketsView self={self} />
+    </HydrationBoundary>
+  );
 }
 </file>
 
@@ -11982,6 +12800,86 @@ export function StatRow({ stats }: { stats: Stat[] }) {
     "typescript": "^5"
   },
   "packageManager": "yarn@4.12.0"
+}
+</file>
+
+<file path="app/(dashboard)/services/page.tsx">
+import { redirect } from "next/navigation";
+import {
+  QueryClient,
+  HydrationBoundary,
+  dehydrate,
+} from "@tanstack/react-query";
+import { ServicesView } from "@/components/services/ServicesView";
+import { getCurrentUser } from "@/server/auth/session";
+import { PATHS } from "@/utils/paths";
+import { listServicesAction } from "@/app/(dashboard)/services/actions";
+import { listIncidentsAction } from "@/app/(dashboard)/incidents/actions";
+
+// Milestone 4: services are real — ServicesView fetches them itself via
+// TanStack Query (listServicesAction as the queryFn, §10). Milestone 5:
+// incidents are real too, and ServicesView fetches those itself as well
+// (listIncidentsAction) to show which active incidents affect a given
+// service. `self` still comes from the session and gates the
+// Manager-only "New service" / edit affordances
+// (lib/permissions.ts#canManageServices).
+//
+// Streaming SSR follow-up (STREAMING_SSR_TODO.md): ServicesView
+// actually runs *two* queries, not the one originally scoped for this
+// item — `["services","list"]` for the list itself and
+// `["incidents","list"]` for the "affecting incidents" list on each
+// card — same discrepancy as Tickets/Incidents before it. Both get
+// prefetched here, same keys ServicesView already uses, same
+// request-scoped `QueryClient` pattern as the earlier pages:
+// `queryClient.query(...).catch(noop)` from the start (not the
+// deprecated `prefetchQuery` — see the note on the `TicketsView`/
+// `DashboardView` entries in STREAMING_SSR_TODO.md), dehydrated into
+// `<HydrationBoundary>` around the unchanged `ServicesView`.
+//
+// `ServicesView` still calls `useQuery` with the exact same two keys —
+// it finds the data already in cache on first client render instead of
+// fetching it, so `isLoading` is false immediately for both. A failed
+// prefetch is swallowed by `.catch(noop)` so `Promise.all` still
+// resolves; that query then hydrates as empty and `ServicesView`'s own
+// `isLoading`/`isError` branch for the services query takes over
+// exactly as it already does today.
+//
+// The route's `loading.tsx` (ServicesViewSkeleton) is what makes this
+// "streaming": Next wraps this page in a Suspense boundary because that
+// file exists, so the shared layout (TopBar, nav) paints immediately
+// and that skeleton shows while the `Promise.all` below is in flight,
+// rather than the whole document waiting on it. See
+// ServicesViewSkeleton's own doc comment for why the Manager-only "New
+// service" button is deliberately left out of that fallback rather than
+// guessed either way.
+const noop = () => {};
+
+export default async function ServicesPage() {
+  const self = await getCurrentUser();
+  if (!self) redirect(PATHS.LOGIN);
+
+  const queryClient = new QueryClient();
+
+  await Promise.all([
+    queryClient
+      .query({
+        queryKey: ["services", "list"],
+        queryFn: listServicesAction,
+      })
+      .catch(noop),
+    queryClient
+      .query({
+        queryKey: ["incidents", "list"],
+        queryFn: listIncidentsAction,
+      })
+      .catch(noop),
+  ]);
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <ServicesView self={self} />
+    </HydrationBoundary>
+  );
 }
 </file>
 
