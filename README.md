@@ -4,6 +4,20 @@ A real-time operations platform for small SaaS teams. Relay puts **work**, **sys
 
 Everything on screen is live: a ticket created in one browser appears in another without a refresh, a service degrading flips the dashboard, and teammates' presence updates as they come and go.
 
+![Two browsers staying in sync: a ticket created in one window appears in the other with no refresh](docs/screenshots/realtime.gif)
+
+## Screenshots
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+| Incident | Services |
+|---|---|
+| ![Incident detail with linked services and tickets](docs/screenshots/incident.png) | ![Service health grid](docs/screenshots/services.png) |
+| **Tickets** | **Activity** |
+| ![Tickets list with filters](docs/screenshots/tickets.png) | ![Activity feed grouped by day](docs/screenshots/activity.png) |
+
+![Team management](docs/screenshots/team.png)
+
 ## Features
 
 - **Tickets** — create, assign, prioritise, and move work through its statuses, with optimistic updates and conflict detection when two people edit the same ticket.
@@ -18,16 +32,16 @@ Everything on screen is live: a ticket created in one browser appears in another
 
 ## Stack
 
-|              |                                                                                                                                                 |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework    | Next.js 16 (App Router, Server Actions), React 19, TypeScript                                                                                   |
-| Styling      | Tailwind CSS 4                                                                                                                                  |
-| Data         | PostgreSQL via Prisma 7 (`@prisma/adapter-pg`)                                                                                                  |
-| Realtime     | Supabase Realtime (Broadcast + Presence) with Realtime Authorization. Supabase is used for Postgres hosting and Realtime only, **not** for auth |
-| Client state | TanStack Query 5                                                                                                                                |
-| Auth         | `jose` (JWT), scrypt password hashing                                                                                                           |
-| Validation   | Zod                                                                                                                                             |
-| Testing      | Playwright (end-to-end), Vitest + React Testing Library (scaffolded)                                                                            |
+| | |
+|---|---|
+| Framework | Next.js 16 (App Router, Server Actions), React 19, TypeScript |
+| Styling | Tailwind CSS 4 |
+| Data | PostgreSQL via Prisma 7 (`@prisma/adapter-pg`) |
+| Realtime | Supabase Realtime (Broadcast + Presence) with Realtime Authorization. Supabase is used for Postgres hosting and Realtime only, **not** for auth |
+| Client state | TanStack Query 5 |
+| Auth | `jose` (JWT), scrypt password hashing |
+| Validation | Zod |
+| Testing | Playwright (end-to-end) |
 
 ## How it's put together
 
@@ -60,7 +74,7 @@ The full product spec and architecture write-up is in [`RELAY_README.md`](./RELA
 
 ### Prerequisites
 
-- Node.js 22+ (Next.js 16 needs 20.9+; the Vitest version used here needs 22)
+- Node.js 20.9+ (required by Next.js 16)
 - Yarn 4 (`corepack enable`)
 - A PostgreSQL database
 - A Supabase project (for Realtime)
@@ -118,25 +132,22 @@ Without the worker, service health stays static. Start it to see services drift 
 
 Seeded accounts all share the password `relay-dev-1234` (dev/demo only):
 
-| Email                                                                          | Role    |
-| ------------------------------------------------------------------------------ | ------- |
-| `maya@kestrel.dev`                                                             | Manager |
-| `josh@kestrel.dev`, `sana@kestrel.dev`, `leo@kestrel.dev`, `priya@kestrel.dev` | Member  |
+| Email | Role |
+|---|---|
+| `maya@kestrel.dev` | Manager |
+| `josh@kestrel.dev`, `sana@kestrel.dev`, `leo@kestrel.dev`, `priya@kestrel.dev` | Member |
 
 Sign in as two different users in two browsers to watch changes sync live.
 
 ## Scripts
 
-| Command                 | What it does                                    |
-| ----------------------- | ----------------------------------------------- |
-| `yarn dev`              | Start the dev server                            |
-| `yarn build`            | `prisma generate` + production build            |
-| `yarn start`            | Serve the production build                      |
-| `yarn lint`             | ESLint                                          |
-| `yarn worker:telemetry` | Run the telemetry worker                        |
-| `yarn test`             | Vitest: `unit` and `components` projects        |
-| `yarn test:watch`       | Same, in watch mode                             |
-| `yarn test:db`          | Vitest `db` project (needs `DATABASE_URL_TEST`) |
+| Command | What it does |
+|---|---|
+| `yarn dev` | Start the dev server |
+| `yarn build` | `prisma generate` + production build |
+| `yarn start` | Serve the production build |
+| `yarn lint` | ESLint |
+| `yarn worker:telemetry` | Run the telemetry worker |
 
 ## Testing
 
@@ -149,7 +160,7 @@ yarn playwright install chromium
 yarn playwright test
 ```
 
-**Unit and component (Vitest + RTL).** The tooling is set up with three projects: `unit` (pure Node: domain rules, validation, helpers), `components` (jsdom + React Testing Library), and `db` (application layer against a real Postgres, using `DATABASE_URL_TEST`, deliberately separate from `DATABASE_URL` because those tests mutate tables). The test files themselves are not written yet; `TESTING_MILESTONES.md` has the plan.
+There are no unit or component tests yet. See [Known limitations](#known-limitations).
 
 ## Project layout
 
@@ -167,3 +178,10 @@ types/               Shared types and status metadata
 ## Not in scope
 
 Relay is an MVP. It deliberately has no chat, email/SMS notifications, billing, mobile apps, third-party integrations, or automation. Service telemetry is simulated rather than collected from real infrastructure.
+
+## Known limitations
+
+- **Telemetry is simulated.** Service health comes from a worker that random-walks latency and error rate, not from real infrastructure.
+- **The telemetry worker needs an always-on process.** It can't run as a serverless function, so a deployment on Vercel alone will show static service health unless the worker is hosted separately (Railway, Fly, Render, or similar).
+- **Test coverage is end-to-end only.** The Playwright spec covers the realtime flows; unit and component tests are not written yet.
+- **Realtime policies are manual.** The Supabase `realtime.messages` RLS policies are set up by hand, not through the Prisma migrations.
